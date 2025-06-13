@@ -2,41 +2,48 @@
 
 A set of Firebase Cloud Functions to store, render, and embed **presets** for PVME. These functions allow you to:
 
-* **Upload** preset data (JSON) into Firestore DB
-* **Render Image** and save a composite PNG of a preset using node-canvas
-* **Serve** an OG-embed-ready endpoint which redirects back to Preset Maker
+- **Upload** preset data (JSON) into Firestore
+- **Render Image** of a preset using node-canvas, saved to Cloud Storage
+- **Embed** via an OG-HTML endpoint that redirects to the PVME front-end
+- **Pre-render** images on every Firestore write
 
 ---
 
 ## Features
 
-* **Upload**: Save or update preset data into Firestore via an HTTP request.
-* **Render Image**: Dynamically compose inventory, equipment, relics, and familiar sprites onto a single canvas, save to GCS, and return a public URL.
-* **OG Embed**: Serve a minimal HTML page with dynamic Open Graph meta tags (including true image dimensions) and redirect to the PVME client.
+- **Upload**: Save or update preset data into Firestore via HTTP
+- **Render Image**: Compose a canvas of items, relics, familiars, and save to GCS
+- **OG Embed**: Serve dynamic Open Graph tags (with actual image dimensions) + redirect
+- **On-Write Trigger**: Automatically regenerate PNG whenever a preset document changes
 
 ---
 
 ## Prerequisites
 
-* Node.js v14+ (or compatible LTS)
-* Firebase CLI (`npm install -g firebase-tools`)
-* A Firebase project with Firestore and Cloud Functions enabled
-* A Google Cloud Storage bucket (configured for public read access)
+- Node.js v14+ (or compatible LTS)
+- Firebase CLI (`npm install -g firebase-tools`)
+- A Firebase project with Firestore, Cloud Functions, and Cloud Storage enabled
+- A publicly-readable GCS bucket for images
+
+Additionally, you will need the following to test locally:
+- **Java 11+** JRE or JDK on your PATH (required by the Firestore emulator)
 
 ---
 
 ## Project Structure
 
 ```text
-pvme-embed-function/
-├── functions/                # Cloud Functions source
-│   ├── assets/               # Font files & slot background
+pvme-preset-server/
+├── functions/
+│   ├── assets/               # Fonts & local images (.png, .ttf)
 │   ├── data/                 # JSON metadata (`sorted_items.json`)
-│   ├── index.js              # Entry point (all functions)
-│   ├── package.json          # Dependencies for functions
-│   └── firebase-debug.log    # (ignored) debug logs
-├── .firebaserc               # Firebase project aliases
-├── firebase.json             # Firebase hosting & functions config
+│   ├── config.js             # Shared constants (bucket, collection, URLs)
+│   ├── lib/                  # Canvas & Firestore helper modules
+│   ├── handlers/             # One file per function
+│   ├── index.js              # Entry point (Admin init + exports)
+│   └── package.json          # Dependencies, scripts
+├── firebase.json             # Emulator & functions config
+├── .firebaserc               # Project aliases
 └── README.md                 # (this file)
 ```
 
@@ -44,78 +51,66 @@ pvme-embed-function/
 
 ## Installation & Deployment
 
-1. **Clone the repository**
-
+1. **Clone the repo**
    ```bash
-   git clone https://github.com/your-org/pvme-embed-function.git
-   cd pvme-embed-function/functions
+   git clone https://github.com/your-org/pvme-preset-server.git
+   cd pvme-preset-server/functions
    ```
 
 2. **Install dependencies**
-
    ```bash
    npm install
    ```
 
-3. **Configure Firebase**
-
+3. **Select your Firebase project**
    ```bash
-   firebase use --add               # choose your project
+   firebase use --add
    ```
 
 4. **Deploy functions**
-
    ```bash
    firebase deploy --only functions
    ```
 
-After deployment, you’ll see three HTTPS URLs in your console output:
+You will see URLs for:
 
-* `uploadPreset` → save/update preset JSON
-* `presetEmbed` → OG embed + redirect
-* `renderPresetImage` → dynamic PNG render
+- `uploadPreset`
+- `presetEmbed`
+- `renderPresetImage`
+
+(And the `onPresetWrite` Firestore trigger runs automatically on writes.)
 
 ---
 
 ## Testing Locally
 
-You can run and test each function on your local machine using the Firebase Emulator Suite:
-
-1. **Install Emulator** (if not already):
-
+1. **Verify Java**
    ```bash
-   npm install -g firebase-tools
-   firebase setup:emulators:firestore
-   firebase setup:emulators:functions
+   java -version
+   ```
+      Should report Java 11+.
+
+2. **Start emulators**
+   ```bash
+   firebase emulators:start --only functions,firestore
    ```
 
-2. **Start Emulators**:
+3. **Invoke endpoints**
 
-   ```bash
-   firebase emulators:start --only firestore,functions
-   ```
-
-3. **Invoke Endpoints**:
-
-   * **uploadPreset**:
-
+   - **uploadPreset**
      ```bash
-     curl -X POST "http://localhost:5001/<PROJECT>/us-central1/uploadPreset?id=test123" \
-          -H "Content-Type: application/json" \
-          -d '{ "presetName": "Test", "inventorySlots": [] }'
+     curl -X POST "http://localhost:5001/<PROJECT>/us-central1/uploadPreset?id=test123"        -H "Content-Type: application/json"        -d '{"presetName":"Test","inventorySlots":[]}'
      ```
-   * **presetEmbed**:
-
+   - **presetEmbed**
      ```bash
      open "http://localhost:5001/<PROJECT>/us-central1/presetEmbed?id=test123"
      ```
-   * **renderPresetImage**:
-
+   - **renderPresetImage**
      ```bash
      open "http://localhost:5001/<PROJECT>/us-central1/renderPresetImage?id=test123"
      ```
 
-Emulator logs will appear in your terminal, and Firestore data is stored locally under `./firebase-debug.log`.
+The `onPresetWrite` trigger will fire whenever you add/update a document under `presets/{presetId}` in the Firestore emulator.
 
 ---
 
@@ -127,76 +122,69 @@ Emulator logs will appear in your terminal, and Firestore data is stored locally
 POST https://<REGION>-<PROJECT>.cloudfunctions.net/uploadPreset?id={optionalPresetId}
 Content-Type: application/json
 
-{ /* preset JSON body */ }
+{ /* preset JSON */ }
 ```
-
-* If `?id=` is provided, calls `presets/{id}.set(...)`
-* Otherwise creates a new document and returns its auto-generated ID
-* **Response:** HTTP 200 with preset ID, or HTTP 500 on error
+- Creates or updates `presets/{id}`.
+- Responds `200` with the preset ID.
 
 ### presetEmbed
 
 ```http
 GET https://<REGION>-<PROJECT>.cloudfunctions.net/presetEmbed?id={presetId}
 ```
-
-* Reads Firestore for metadata (name/description)
-* Loads the cached PNG from GCS to determine its true `width`/`height`
-* Serves an HTML page with Open Graph meta tags:
-
-  * `og:image`, `og:image:width`, `og:image:height`, `og:title`, `og:description`
-* Includes a `<meta http-equiv="refresh">` to redirect immediately to your front-end
-* **Response:** HTML (cacheable for 1 hour)
+- Reads Firestore metadata.
+- Determines true image dimensions.
+- Returns an HTML page with OG tags and an immediate redirect.
+- **Cache-Control:** public, max-age=3600
 
 ### renderPresetImage
 
 ```http
 GET https://<REGION>-<PROJECT>.cloudfunctions.net/renderPresetImage?id={presetId}[&debug=true]
 ```
+- Checks GCS for an existing PNG → redirects if found.
+- If missing, verifies Firestore doc → 404 if not found.
+- Otherwise, renders via node-canvas, saves to GCS, then redirects.
+- Responds `302` to the public GCS URL.
 
-* Fetches preset data from Firestore
-* Loads UI assets + item/familiar/relic sprites
-* Lays out a canvas with inventory, equipment, relics, familiar slots
-* Renders text labels and optional debug outlines
-* Saves the PNG to `gs://{BUCKET_NAME}/images/{presetId}.png`
-* Redirects the caller to the public GCS URL of the generated image
-* **Response:** HTTP 302 redirect → `https://storage.googleapis.com/...` or HTTP 500 on error
+### onPresetWrite
+
+```js
+// Firestore trigger:
+onDocumentWritten({ document: 'presets/{presetId}' }, onPresetWriteHandler)
+```
+- Automatically calls rendering logic on every write to `presets/{presetId}`.
+- Ensures every edit immediately updates the stored PNG.
 
 ---
 
 ## Helper Modules
 
-* **Font registration** (`canvas.registerFont`) for Roboto at weights 400, 700, 800
-* **Image drawing**:
-
-  * `drawCentered(ctx, img, x, y, slotW, slotH)`
-  * `drawFitted(ctx, img, x, y, slotW, slotH)`
-* **Data loader**: `getPresetData(presetId)` fetches Firestore docs and remaps slot arrays
-* **Batch loader**: `queueSection(...)` returns promises to `loadImage()` + target coordinates
+- **config.js** — Central constants (`BUCKET_NAME`, collection name, client URL)
+- **lib/firestore.js** — `getPresetData(presetId)` → Firestore lookup + item mapping
+- **lib/canvas.js**
+  - `drawCentered(ctx, img, x, y, slotW, slotH)`
+  - `drawFitted(ctx, img, x, y, slotW, slotH)`
+  - `queueSection(...)` for batching `loadImage()` tasks
+  - **handlers/** — Plain functions (`uploadPresetHandler`, etc.)
 
 ---
 
-## Folder Layout
+## Emulator Configuration
 
-```text
-functions/
-├── assets/
-│   ├── Roboto-Medium.ttf
-│   ├── Roboto-Bold.ttf
-│   └── Roboto-ExtraBold.ttf
-├── data/
-│   └── sorted_items.json
-├── index.js
-├── package.json
-└── package-lock.json
+```jsonc
+// firebase.json
+{
+  "functions": { "source": "functions" },
+  "emulators": {
+    "functions": { "port": 5001 },
+    "firestore":  { "port": 8080 }
+  }
+}
 ```
-
-* **assets/**: custom fonts & local slot background image
-* **data/**: your `sorted_items.json` mapping labels to image URLs and metadata
-* **index.js**: main implementation of all three HTTP Cloud Functions
 
 ---
 
 ## License
 
-This project is released under the [MIT License](LICENSE).
+Released under the [MIT License](LICENSE).

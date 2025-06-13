@@ -1,7 +1,8 @@
 // functions/functions/uploadPreset.js
 
 const admin     = require('firebase-admin');
-const { PRESET_COLLECTION } = require('../config');
+const { BUCKET_NAME, PRESET_COLLECTION } = require('../config');
+const { getImageUrl } = require('../lib/getImageUrl');
 
 async function uploadPresetHandler(req, res) {
   try {
@@ -9,13 +10,14 @@ async function uploadPresetHandler(req, res) {
     const presetId = req.query.id;
     const col      = admin.firestore().collection(PRESET_COLLECTION);
 
-    if (presetId) {
-      await col.doc(presetId).set(body);
-      return res.status(200).send(presetId);
-    } else {
-      const ref = await col.add(body);
-      return res.status(200).send(ref.id);
-    }
+    // 1) Save JSON to Firestore
+    const idToUse = presetId
+      ? (await col.doc(presetId).set(body) && presetId)
+      : (await col.add(body)).id;
+
+      const imageUrl = getImageUrl(presetId);
+      return res.status(200).send(imageUrl);
+
   } catch (err) {
     console.error('uploadPreset error', err);
     return res.status(500).send(err.toString());

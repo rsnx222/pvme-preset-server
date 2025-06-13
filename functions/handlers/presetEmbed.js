@@ -2,12 +2,12 @@
 
 const admin   = require('firebase-admin');
 const {
-  BUCKET_NAME,
   PRESET_COLLECTION,
   WEB_CLIENT_URL,
   DEV_CLIENT_URL,
   EMBED_CACHE_SECONDS
 } = require('../config');
+const { getImageUrl } = require('../lib/getImageUrl');
 
 async function presetEmbedHandler(req, res) {
   const id = req.query.id;
@@ -28,7 +28,7 @@ async function presetEmbedHandler(req, res) {
   const desc  = `View my PVME preset: ${data.presetName || id}`;
   // Use the Firestore updateTime for cache‐bust
   const v     = doc.updateTime.toMillis();
-  const img   = `https://storage.googleapis.com/${BUCKET_NAME}/images/${id}.png?v=${v}`;
+  const img = getImageUrl(id);
 
   // switch front‐end redirect based on emulator vs prod
   const isEmulator = !!process.env.FIRESTORE_EMULATOR_HOST;

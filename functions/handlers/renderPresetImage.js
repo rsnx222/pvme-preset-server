@@ -3,7 +3,8 @@
 const admin                  = require('firebase-admin');
 const { Storage }            = require('@google-cloud/storage');
 const { renderAndSaveImage } = require('../lib/render');
-const { BUCKET_NAME, PRESET_COLLECTION } = require('../config');
+const { BUCKET_NAME } = require('../config');
+const { getImageUrl } = require('../lib/getImageUrl');
 
 const storage = new Storage();
 const bucket  = storage.bucket(BUCKET_NAME);
@@ -33,9 +34,9 @@ async function renderPresetRedirectHandler(req, res) {
   }
 
 
-  // 3) Redirect to the fresh PNG (with cache‐bust)
-  const url = `https://storage.googleapis.com/${BUCKET_NAME}/images/${id}.png?v=${Date.now()}`;
-  return res.redirect(url);
+  // 3) Return the fresh PNG URL in JSON (with cache‐bust)
+  const imageUrl = getImageUrl(id);
+  return res.status(200).json({ imageUrl: url });
 }
 
 module.exports = { renderPresetRedirectHandler };

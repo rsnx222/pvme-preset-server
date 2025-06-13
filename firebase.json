@@ -14,7 +14,7 @@
   ],
   "emulators": {
     "functions": {
-      "port": 5001
+      "port": 9199
     },
     "ui": {
       "enabled": true
@@ -23,5 +23,8 @@
     "firestore": {
       "port": 8080
     }
+  },
+  "storage": {
+    "rules": "storage.rules"
   }
 }

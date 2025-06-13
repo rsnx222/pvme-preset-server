@@ -32,6 +32,7 @@ pvme-preset-server/
 │   └── package.json          # Dependencies, scripts
 ├── firebase.json             # Emulator & functions config
 ├── .firebaserc               # Project aliases
+├── start-dev.js              # Local development startup
 └── README.md                 # (this file)
 ```
 
@@ -53,8 +54,9 @@ pvme-preset-server/
 {
   "functions": { "source": "functions" },
   "emulators": {
-    "functions": { "port": 5001 },
-    "firestore":  { "port": 8080 }
+    "functions":  { "port": 5001 },
+    "firestore":  { "port": 8080 },
+    "storage":    { "port": 9199 }
   }
 }
 ```
@@ -69,7 +71,9 @@ pvme-preset-server/
 
 2. **Start emulators**
    ```bash
-   firebase emulators:start --only functions,firestore
+   npm run dev
+   # or
+   yarn dev
    ```
 
 3. **Invoke endpoints**

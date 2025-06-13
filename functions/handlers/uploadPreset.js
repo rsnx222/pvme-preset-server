@@ -10,7 +10,7 @@ async function uploadPresetHandler(req, res) {
     const col      = admin.firestore().collection(PRESET_COLLECTION);
 
     if (presetId) {
-      await col.doc(presetId).set(body, { merge: true });
+      await col.doc(presetId).set(body);
       return res.status(200).send(presetId);
     } else {
       const ref = await col.add(body);

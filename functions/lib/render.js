@@ -46,14 +46,30 @@ async function renderAndSaveImage(id, debug = false) {
 
   const relicsPrimBottom = relics.sy + relics.h * relics.rows + relics.gy * (relics.rows - 1);
   const altRelics = (preset.relics.alternative || []).filter(s => s && (s.label || s.image));
+
+  // count how many primary relic slots are actually filled
+  const filledPrimaryCount  = (preset.relics.primary || [])
+    .filter(s => s && (s.label || s.image))
+    .length;
+  const emptyPrimaryCount   = relics.rows - filledPrimaryCount;
+
+  // compute where the alternatives section ends
   const relicsAltBottom = altRelics.length
-    ? relicsPrimBottom + 30 + gutter + altRelics.length * (relics.h + relics.gy)
+    // start at prim bottom, drop 30px+gutter, then lift up for empty primary slots,
+    // then add each alt slot height+gap
+    ? (relicsPrimBottom
+       + 30 + gutter
+       - emptyPrimaryCount * (relics.h + relics.gy)
+       + altRelics.length * (relics.h + relics.gy))
     : relicsPrimBottom;
 
   const famPrimBottom = familiars.sy + familiars.h * familiars.rows + familiars.gy * (familiars.rows - 1);
   const altFam = (preset.familiars.alternative || []).filter(s => s && (s.label || s.image));
   const famAltBottom = altFam.length
-    ? famPrimBottom + 30 + gutter + altFam.length * (familiars.h + familiars.gy)
+    ? (famPrimBottom
+       + 30 + gutter
+       - (familiars.rows - ((preset.familiars.primary || []).filter(s => s && (s.label||s.image)).length)) * (familiars.h + familiars.gy)
+       + altFam.length * (familiars.h + familiars.gy))
     : famPrimBottom;
 
   // 5) final canvas size
@@ -85,26 +101,46 @@ async function renderAndSaveImage(id, debug = false) {
     drawCentered(ctx, img, x, y, w, h);
   });
 
-  // 8) primary relics
-  const relicTasks = queueSection(preset.relics.primary, 1, relics.w, relics.h,
-    relics.sx, relics.sy, relics.gx, relics.gy);
-  (await Promise.all(relicTasks)).forEach(({img,x,y,w,h}) => {
+  // 8) primary relics — only draw non-empty slots
+  const isFilled = s => s && (s.label || s.image);
+  const filledPrimaryRelics = (preset.relics.primary || []).filter(isFilled);
+  const relicTasks = queueSection(
+    filledPrimaryRelics,
+    1, relics.w, relics.h,
+    relics.sx, relics.sy,
+    relics.gx, relics.gy
+  );
+  (await Promise.all(relicTasks)).forEach(({img,x,y,w,h}, i) => {
     ctx.strokeStyle = '#485968'; ctx.lineWidth = 0.75; ctx.strokeRect(x,y,w,h);
     drawFitted(ctx, img, x+4, y+4, 24, 24);
-    const slot = preset.relics.primary[(y - relics.sy)/(relics.h+relics.gy)];
+    const slot = filledPrimaryRelics[i];
     ctx.fillStyle = 'white'; ctx.font = '700 14px Roboto, Arial, sans-serif';
     ctx.fillText(slot.name||slot.label, x+36, y+h/2+5);
   });
 
   // 9) alternative relics
   if (altRelics.length) {
-    const altY = relicsPrimBottom + 37;
+    // shift-up by the count of empty primary slots
+    const totalPrimarySlots    = preset.relics.primary.length;
+    const renderedPrimCount    = filledPrimaryRelics.length;
+    const emptyPrimarySlots    = totalPrimarySlots - renderedPrimCount;
+    // original gap = 30px (label) + gutter
+    const originalLabelOffset  = 37; // 30 + gutter (7)
+    // vertical lift amount = number of empties * (slot height + slot gutter)
+    const liftAmount           = emptyPrimarySlots * (relics.h + relics.gy);
+    // compute new Y
+    const altY = relicsPrimBottom + originalLabelOffset - liftAmount;
     const altX = gutter + bottomColWidth/2;
     ctx.textAlign='center'; ctx.font='400 14px Roboto, Arial, sans-serif'; ctx.fillStyle='white';
     ctx.fillText('Alternatives', altX, altY);
     ctx.textAlign='left';
-    const altTasks = queueSection(altRelics,1,relics.w,relics.h,
-      relics.sx,altY+15,relics.gx,relics.gy);
+    const altTasks = queueSection(
+      altRelics, 1, relics.w, relics.h,
+      relics.sx,
+      altY + 15,
+      relics.gx,
+      relics.gy
+    );
     (await Promise.all(altTasks)).forEach(({img,x,y,w,h},i) => {
       ctx.strokeStyle='#485968'; ctx.lineWidth=0.75; ctx.strokeRect(x,y,w,h);
       drawFitted(ctx,img,x+4,y+4,24,24);
@@ -114,26 +150,47 @@ async function renderAndSaveImage(id, debug = false) {
     });
   }
 
-  // 10) primary familiars
-  const famTasks = queueSection(preset.familiars.primary, 1, familiars.w, familiars.h,
-    familiars.sx, familiars.sy, familiars.gx, familiars.gy);
-  (await Promise.all(famTasks)).forEach(({img,x,y,w,h}) => {
-    ctx.strokeStyle='#485968'; ctx.lineWidth=0.75; ctx.strokeRect(x,y,w,h);
-    drawFitted(ctx,img,x+4,y+4,24,24);
-    const slot = preset.familiars.primary[0];
-    ctx.fillStyle='white'; ctx.font='700 14px Roboto, Arial, sans-serif';
-    ctx.fillText(slot.name||slot.label,x+36,y+h/2+5);
+  // 10) primary familiars — only draw non-empty slots
+  const filledPrimaryFamiliars = (preset.familiars.primary || []).filter(isFilled);
+  const famTasks = queueSection(
+    filledPrimaryFamiliars,
+    1, familiars.w, familiars.h,
+    familiars.sx, familiars.sy,
+    familiars.gx, familiars.gy
+  );
+  (await Promise.all(famTasks)).forEach(({img,x,y,w,h}, i) => {
+    ctx.strokeStyle = '#485968'; ctx.lineWidth = 0.75; ctx.strokeRect(x,y,w,h);
+    drawFitted(ctx, img, x+4, y+4, 24, 24);
+    const slot = filledPrimaryFamiliars[i];
+    ctx.fillStyle = 'white'; ctx.font = '700 14px Roboto, Arial, sans-serif';
+    ctx.fillText(slot.name||slot.label, x+36, y+h/2+5);
   });
+
+  // compute how many primary‐fam slots are actually filled
+  const filledPrimaryFam = preset.familiars.primary
+    .filter(s => s && (s.label || s.image));
 
   // 11) alternative familiars
   if (altFam.length) {
-    const altFY = famPrimBottom + 37;
+    // original offset down from famPrimBottom: 30px + gutter = 37
+    const originalOffset = 37;
+    // how many empty primaries to lift by
+    const emptyPrimaryFam = preset.familiars.primary.length - filledPrimaryFam.length;
+    // lift amount = emptyCount * (slot height + slot gutter)
+    const liftFam = emptyPrimaryFam * (familiars.h + familiars.gy);
+    // new top-Y for "Alternatives" section
+    const altFY = famPrimBottom + originalOffset - liftFam;
     const altFX = gutter*2 + bottomColWidth + bottomColWidth/2;
     ctx.textAlign='center'; ctx.font='400 14px Roboto, Arial, sans-serif'; ctx.fillStyle='white';
     ctx.fillText('Alternatives', altFX, altFY);
     ctx.textAlign='left';
-    const famAltTasks = queueSection(altFam,1,familiars.w,familiars.h,
-      familiars.sx,altFY+15,familiars.gx,familiars.gy);
+    const famAltTasks = queueSection(
+      altFam, 1, familiars.w, familiars.h,
+      familiars.sx,
+      altFY + 15,  // drop below the moved header
+      familiars.gx,
+      familiars.gy
+    );
     (await Promise.all(famAltTasks)).forEach(({img,x,y,w,h},i) => {
       ctx.strokeStyle='#485968'; ctx.lineWidth=0.75; ctx.strokeRect(x,y,w,h);
       drawFitted(ctx,img,x+4,y+4,24,24);

@@ -170,6 +170,16 @@ onDocumentWritten({ document: 'presets/{presetId}' }, onPresetWriteHandler)
 
 ---
 
+## Expected Usage vs Free-Tier Limits
+
+| Resource            | Free-Tier Limit                                   | Expected Usage                            | Calculation                                                                                                         |
+| ------------------- | ------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **Cloud Functions** | 2 000 000 invocations/month<br>400 000 GB-s/month | \~12 000 invocations<br>\~300 GB-s/month  | **Invocations:** 1 000 uploads + 10 000 embeds + 1 000 renders = 12 000<br>**GB-s:** 12 000 × 0.05 s × 0.5 GB = 300 |
+| **Firestore**       | 50 000 reads/day<br>20 000 writes/day             | \~2 000 reads/day<br>\~1 000 writes/day   | **Reads:** 1 000 edits × 2 reads/edit = 2 000/day<br>**Writes:** 1 000 edits = 1 000/day                            |
+| **Cloud Storage**   | 5 GiB storage<br>100 GiB egress/month             | \~0.5 GiB storage<br>\~2 GiB egress/month | **Storage:** 5 000 presets × 0.1 MiB = 500 MiB<br>**Egress:** 20 000 views × 0.1 MiB = 2 000 MiB                    |
+
+---
+
 ## Emulator Configuration
 
 ```jsonc

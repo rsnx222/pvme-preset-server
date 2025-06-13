@@ -10,7 +10,8 @@ firebase-debug.*.log*
 # Firebase cache
 .firebase/
 
-# Firebase config
+# Service account key (do not commit!)
+prod-sa.json
 
 # local test files
 test-preset.png

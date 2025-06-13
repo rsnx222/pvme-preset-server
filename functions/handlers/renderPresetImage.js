@@ -29,8 +29,9 @@ async function renderPresetRedirectHandler(req, res) {
     await renderAndSaveImage(id, /* debug */ req.query.debug === 'true');
   } catch (err) {
     console.error(`Error re-rendering preset ${id}:`, err);
-    return res.status(500).send('Render failed');
+    return res.status(500).send(err.message || err.toString());
   }
+
 
   // 3) Redirect to the fresh PNG (with cache‐bust)
   const url = `https://storage.googleapis.com/${BUCKET_NAME}/images/${id}.png?v=${Date.now()}`;

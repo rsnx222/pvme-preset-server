@@ -1,11 +1,6 @@
 # PVME Preset Server
 
-A set of Firebase Cloud Functions to store, render, and embed **presets** for PVME. These functions allow you to:
-
-- **Upload** preset data (JSON) into Firestore
-- **Render Image** of a preset using node-canvas, saved to Cloud Storage
-- **Embed** via an OG-HTML endpoint that redirects to the PVME front-end
-- **Pre-render** images on every Firestore write
+A set of Firebase Cloud Functions to store, render, and embed **presets** for PVME. These functions use a GitHub repo as the JSON store (`https://github.com/rsnx222/pvme-preset-store`), and render images via node-canvas and Google Cloud Storage.
 
 ---
 
@@ -13,10 +8,10 @@ A set of Firebase Cloud Functions to store, render, and embed **presets** for PV
 
 ### Features
 
-- **Upload**: Save or update preset data into Firestore via HTTP
+- **Upload**: Save or update preset data (JSON) to GitHub via HTTP
 - **Render Image**: Compose a canvas of items, relics, familiars, and save to GCS
-- **OG Embed**: Serve dynamic Open Graph tags (with actual image dimensions) + redirect
-- **On-Write Trigger**: Automatically regenerate PNG whenever a preset document changes
+- **OG Embed**: Serve dynamic Open Graph tags + redirect to front-end
+- **GitHub Webhook**: Automatically regenerate PNG whenever a `presets/*.json` file changes in the repo
 
 ### Project Structure
 
@@ -25,10 +20,10 @@ pvme-preset-server/
 ├── functions/
 │   ├── assets/               # Fonts & local images (.png, .ttf)
 │   ├── data/                 # JSON metadata (`sorted_items.json`)
-│   ├── config.js             # Shared constants (bucket, collection, URLs)
-│   ├── lib/                  # Canvas & Firestore helper modules
+│   ├── config.js             # Shared constants (bucket, URLs)
+│   ├── lib/                  # Canvas & GitHub helper modules
 │   ├── handlers/             # One file per function
-│   ├── index.js              # Entry point (Admin init + exports)
+│   ├── index.js              # Entry point (exports)
 │   └── package.json          # Dependencies, scripts
 ├── firebase.json             # Emulator & functions config
 ├── .firebaserc               # Project aliases
@@ -44,8 +39,10 @@ pvme-preset-server/
 
 - Node.js v14+ (or compatible LTS)
 - Firebase CLI (`npm install -g firebase-tools`)
-- A Firebase project with Firestore, Cloud Functions, and Cloud Storage enabled
-- Java 11+ installed and in your system PATH (for Firestore emulator)
+- A Firebase project with Cloud Functions and Cloud Storage enabled
+- Java 11+ installed for emulators
+- A **GitHub personal access token** in `GITHUB_TOKEN` env var
+- `GITHUB_OWNER`, `GITHUB_REPO` (just the repo name), and `GITHUB_BRANCH` set in `.env.development`
 
 ### Emulator Configuration
 
@@ -55,8 +52,7 @@ pvme-preset-server/
   "functions": { "source": "functions" },
   "emulators": {
     "functions":  { "port": 5001 },
-    "firestore":  { "port": 8080 },
-    "storage":    { "port": 9199 }
+    "storage":    { "port": 9199, "host": "127.0.0.1" }
   }
 }
 ```
@@ -72,8 +68,6 @@ pvme-preset-server/
 2. **Start emulators**
    ```bash
    npm run dev
-   # or
-   yarn dev
    ```
 
 3. **Invoke endpoints**
@@ -95,41 +89,9 @@ pvme-preset-server/
      open "http://localhost:5001/<PROJECT_ID>/us-central1/renderPresetImage?id=test123"
      ```
 
-4. Firestore writes to `presets/{presetId}` will automatically trigger the `onPresetWrite` function.
-
-### Sync Production Firestore → Local Emulator
-
-#### Prerequisites
-
-- `gcloud` CLI authenticated
-- Service account with Firestore access
-- Firestore emulator running
-- `prod-sa.json` key (keep this in `.gitignore`)
-
-#### 1. Create the key
-
-```bash
-gcloud iam service-accounts keys create prod-sa.json \
-  --iam-account=firestore-sync@<PROJECT_ID>.iam.gserviceaccount.com
-```
-
-#### 2. Start emulator
-
-```bash
-firebase emulators:start --only firestore
-```
-
-#### 3. Run sync script
-
-```bash
-node scripts/syncPresets.js
-```
-
-Should output:
-
-```text
-Copied 42 docs from "presets"
-```
+4. **GitHub Webhook**
+   - Push changes to `presets/*.json` in your GitHub repo
+   - The `onPresetWrite` HTTP handler handles `push` events, re-renders and uploads the image
 
 ---
 
@@ -146,8 +108,7 @@ You will see URLs for:
 - `uploadPreset`
 - `presetEmbed`
 - `renderPresetImage`
-
-The `onPresetWrite` Firestore trigger runs automatically when any document is created/updated in `presets/`.
+- `onPresetWrite` (webhook endpoint)
 
 ---
 
@@ -162,7 +123,7 @@ Content-Type: application/json
 { /* preset JSON */ }
 ```
 
-Creates or updates `presets/{id}`. Responds with 200 and the ID.
+Creates or updates `presets/{id}.json` in the GitHub repo. Responds with 200 and the image URL.
 
 #### presetEmbed
 
@@ -170,8 +131,7 @@ Creates or updates `presets/{id}`. Responds with 200 and the ID.
 GET https://<REGION>-<PROJECT_ID>.cloudfunctions.net/presetEmbed?id={presetId}
 ```
 
-Reads Firestore and image metadata, then returns an HTML page with Open Graph tags + immediate redirect.  
-**Cache-Control:** public, max-age=3600
+Reads JSON from GitHub, builds OG meta tags + HTML redirect to front-end, and returns that HTML.
 
 #### renderPresetImage
 
@@ -179,38 +139,18 @@ Reads Firestore and image metadata, then returns an HTML page with Open Graph ta
 GET https://<REGION>-<PROJECT_ID>.cloudfunctions.net/renderPresetImage?id={presetId}[&debug=true]
 ```
 
-- Redirects to existing image if found
-- Otherwise renders canvas and uploads PNG to GCS
-- Always returns a 302 to the public PNG URL
+Reads JSON from GitHub, re-renders the canvas image, uploads to GCS, and returns `{ imageUrl }` in JSON.
 
-#### onPresetWrite (Trigger)
+#### onPresetWrite (Webhook)
 
 ```js
-onDocumentWritten({ document: 'presets/{presetId}' }, onPresetWriteHandler)
+// GitHub webhook configured on the repo's Settings -> Webhooks
+POST /onPresetWrite
+Headers: X-Hub-Signature-256, X-GitHub-Event: push
+Body: GitHub push payload
 ```
 
-Automatically re-renders the preset PNG when the preset data changes in Firestore.
-
----
-
-### Helper Modules
-
-- **config.js** — Central constants (`BUCKET_NAME`, collection name, client URL)
-- **lib/firestore.js** — `getPresetData(presetId)` → Firestore lookup + item mapping
-- **lib/canvas.js**
-  - `drawCentered(ctx, img, x, y, slotW, slotH)`
-  - `drawFitted(ctx, img, x, y, slotW, slotH)`
-  - `queueSection(...)` for batching `loadImage()` tasks
-
----
-
-### Usage vs Free-Tier Limits
-
-| Resource            | Free-Tier Limit                                   | Expected Usage                            | Calculation                                                                                                         |
-|---------------------|---------------------------------------------------|--------------------------------------------|---------------------------------------------------------------------------------------------------------------------|
-| **Cloud Functions** | 2,000,000 invocations/month<br>400,000 GB-s/month | ~12,000 invocations<br>~300 GB-s/month     | 1,000 uploads + 10,000 embeds + 1,000 renders = 12,000 × 0.05s × 0.5 GB = 300 GB-s                                  |
-| **Firestore**       | 50,000 reads/day<br>20,000 writes/day             | ~2,000 reads/day<br>~1,000 writes/day      | 1,000 edits × 2 reads/edit = 2,000 reads/day<br>1,000 writes = 1,000 writes/day                                    |
-| **Cloud Storage**   | 5 GiB storage<br>100 GiB egress/month             | ~0.5 GiB storage<br>~2 GiB egress/month    | 5,000 PNGs × 0.1 MiB = 500 MiB<br>20,000 views × 0.1 MiB = 2,000 MiB (2 GiB)                                       |
+Processes added/modified/deleted `presets/*.json`, rendering or deleting images accordingly.
 
 ---
 

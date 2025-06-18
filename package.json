@@ -1,5 +1,8 @@
 {
   "scripts": {
     "dev": "node start-dev.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.5.0"
   }
 }

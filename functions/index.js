@@ -1,5 +1,7 @@
 // functions/index.js
-require('dotenv').config();
+if (process.env.NODE_ENV === 'development') {
+  require('dotenv').config();
+}
 
 // 1) Initialize Admin SDK
 const admin = require("firebase-admin");

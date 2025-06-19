@@ -2,7 +2,7 @@
   "scripts": {
     "dev": "node start-dev.js"
   },
-  "dependencies": {
+  "devDependencies": {
     "dotenv": "^16.5.0"
   }
 }

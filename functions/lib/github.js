@@ -3,6 +3,7 @@
 const path = require('path');
 // Load environment variables from .env for local development
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+
 const { v4: uuidv4 } = require('uuid');
 
 const {
@@ -12,15 +13,17 @@ const {
   GITHUB_TOKEN
 } = process.env;
 
-if (!GITHUB_TOKEN) throw new Error('Missing GITHUB_TOKEN');
-
 /**
  * Dynamically import the Octokit client (ESM) at runtime
  */
 async function getOctokit() {
+  if (!GITHUB_TOKEN) {
+    throw new Error('Missing GITHUB_TOKEN');
+  }
   const { Octokit } = await import('@octokit/rest');
   return new Octokit({ auth: GITHUB_TOKEN });
 }
+
 
 /**
 async function getOctokit() {
@@ -99,4 +102,9 @@ module.exports = {
   getFileSha,
   getFileContent,
   upsertJsonFile,
+  getOctokit,
+  GITHUB_OWNER,
+  GITHUB_REPO,
+  GITHUB_BRANCH,
+  uuidv4
 };

@@ -9,7 +9,14 @@
         "firebase-debug.log",
         "firebase-debug.*.log",
         "*.local"
-      ]
+      ],
+      "environmentVariables": {
+        "GITHUB_TOKEN": "projects/just-amp-462520-i5/secrets/github-token/versions/latest",
+        "GITHUB_WEBHOOK_SECRET": "projects/just-amp-462520-i5/secrets/github-webhook-secret/versions/latest",
+        "GITHUB_OWNER": "projects/just-amp-462520-i5/secrets/github-owner/versions/latest",
+        "GITHUB_REPO": "projects/just-amp-462520-i5/secrets/github-repo/versions/latest",
+        "GITHUB_BRANCH": "projects/just-amp-462520-i5/secrets/github-branch/versions/latest"
+      }
     }
   ],
   "emulators": {

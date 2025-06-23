@@ -4,7 +4,7 @@ const { getFileContent } = require('../lib/github');
 const { getSecret } = require('../lib/secrets');
 
 // Only public origins go here
-const ALLOWED_ORIGINS = ['https://pvme.io'];
+const ALLOWED_ORIGINS = ['https://pvme.io', 'https://rsnx222.github.io'];
 
 async function getPresetHandler(req, res) {
   const origin = req.get('origin');

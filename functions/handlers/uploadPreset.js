@@ -5,7 +5,7 @@ const { ensurePresetId, upsertJsonFile, getFileContent } = require('../lib/githu
 const { getSecret } = require('../lib/secrets');
 
 // Only public origins go here
-const ALLOWED_ORIGINS = ['https://pvme.io'];
+const ALLOWED_ORIGINS = ['https://pvme.io', 'https://rsnx222.github.io'];
 
 async function uploadPresetHandler(req, res) {
   const origin = req.get('origin');

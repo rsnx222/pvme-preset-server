@@ -33,7 +33,7 @@ async function presetEmbedHandler(req, res) {
   const title = `PVME Preset: ${data.presetName || id}`;
   const desc  = `View my PVME preset: ${data.presetName || id}`;
   const v     = Date.now();
-  const img   = getImageUrl(id);
+  const img   = await getImageUrl(id);
 
   // choose front-end root based on environment
   const isDev = process.env.NODE_ENV === 'development';
